@@ -1,0 +1,1259 @@
+<!DOCTYPE html>
+<html lang="en" class="h-full bg-slate-50">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JiraFlow - Project & Issue Tracker</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Inter Font -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+</head>
+<body class="h-full font-sans antialiased text-slate-800 flex flex-col overflow-hidden">
+
+<div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col space-y-3 pointer-events-none"></div>
+
+<div class="flex h-full w-full overflow-hidden">
+
+    <!-- SIDEBAR NAVIGATION -->
+    <aside class="w-64 bg-slate-900 text-slate-300 flex flex-col shadow-xl z-20 flex-shrink-0">
+        <div class="p-5 flex items-center space-x-3 border-b border-slate-800">
+            <div class="bg-indigo-600 text-white p-2 rounded-lg shadow-md flex items-center justify-center font-bold">
+                <i class="fa-solid fa-layer-group text-lg"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-lg text-white tracking-wide">JiraFlow Pro</h1>
+                <span class="text-xs text-indigo-400 font-medium">Spring Boot Tracker</span>
+            </div>
+        </div>
+
+        <nav class="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
+            <button onclick="switchTab('projects')" id="nav-projects" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all bg-indigo-600 text-white shadow-md shadow-indigo-900/30">
+                <i class="fa-solid fa-folder-kanban w-5"></i>
+                <span>Projects & Issues</span>
+            </button>
+            <button onclick="switchTab('users')" id="nav-users" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-slate-400 hover:bg-slate-800 hover:text-white">
+                <i class="fa-solid fa-users w-5"></i>
+                <span>Users & Members</span>
+            </button>
+            <button onclick="switchTab('activity')" id="nav-activity" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-slate-400 hover:bg-slate-800 hover:text-white">
+                <i class="fa-solid fa-chart-line w-5"></i>
+                <span>Activity Logs & Velocity</span>
+            </button>
+            <button onclick="switchTab('settings')" id="nav-settings" class="w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-slate-400 hover:bg-slate-800 hover:text-white">
+                <i class="fa-solid fa-gear w-5"></i>
+                <span>API Configuration</span>
+            </button>
+        </nav>
+
+        <div class="p-4 border-t border-slate-800 bg-slate-950/50">
+            <div class="flex items-center justify-between text-xs text-slate-400">
+                <span>Backend Status:</span>
+                <span id="api-status-badge" class="px-2 py-0.5 rounded bg-amber-500/10 text-amber-400 border border-amber-500/20 font-semibold">Checking...</span>
+            </div>
+            <div class="mt-2 text-[11px] text-slate-500 truncate" id="sidebar-api-url">(same origin) /api</div>
+        </div>
+    </aside>
+
+    <!-- MAIN CONTENT AREA -->
+    <main class="flex-1 flex flex-col min-w-0 overflow-hidden bg-slate-50">
+
+        <!-- TOP BAR -->
+        <header class="h-16 bg-white border-b border-slate-200 px-6 flex items-center justify-between shadow-xs z-10">
+            <div class="flex items-center space-x-4">
+                <h2 id="current-page-title" class="text-xl font-bold text-slate-800 tracking-tight">Projects Workspace</h2>
+                <span id="current-project-breadcrumb" class="text-sm text-slate-500 hidden items-center space-x-2">
+                        <i class="fa-solid fa-chevron-right text-xs"></i>
+                        <span id="breadcrumb-project-name" class="font-semibold text-indigo-600">Project</span>
+                        <button onclick="clearSelectedProject()" class="text-xs ml-2 bg-slate-100 hover:bg-slate-200 text-slate-600 px-2 py-0.5 rounded transition">Back to Projects</button>
+                    </span>
+            </div>
+
+            <div class="flex items-center space-x-3">
+                <button onclick="testConnection()" class="flex items-center space-x-2 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-semibold rounded-lg transition">
+                    <i class="fa-solid fa-rotate"></i>
+                    <span>Ping API</span>
+                </button>
+                <div class="h-6 w-px bg-slate-200"></div>
+                <div class="flex items-center space-x-2">
+                    <div class="w-8 h-8 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-sm shadow-xs">AD</div>
+                    <span class="text-sm font-medium text-slate-700 hidden sm:inline">Admin User</span>
+                </div>
+            </div>
+        </header>
+
+        <!-- TAB CONTENT CONTAINER -->
+        <div class="flex-1 overflow-y-auto p-6">
+
+            <!-- TAB 1: PROJECTS & ISSUES -->
+            <section id="tab-projects" class="space-y-6">
+                <!-- Projects View (Default) -->
+                <div id="projects-view-container">
+                    <div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 bg-white p-5 rounded-2xl shadow-xs border border-slate-200">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-800">Your Projects</h3>
+                            <p class="text-sm text-slate-500">Manage projects, review workload distribution, and inspect metrics.</p>
+                        </div>
+                        <div class="flex items-center space-x-3">
+                            <button onclick="openModal('create-project-modal')" class="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition">
+                                <i class="fa-solid fa-plus"></i>
+                                <span>New Project</span>
+                            </button>
+                            <button onclick="loadProjects()" class="p-2 border border-slate-200 hover:bg-slate-100 rounded-xl text-slate-600 transition">
+                                <i class="fa-solid fa-arrows-rotate"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Projects Grid -->
+                    <div id="projects-grid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-6">
+                        <!-- Populated via JS -->
+                        <div class="col-span-full py-12 text-center text-slate-400">
+                            <i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i>
+                            <p>Loading projects...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Issues Workspace View (Hidden until project selected) -->
+                <div id="issues-workspace-container" class="hidden space-y-6">
+                    <!-- Project Header Info & Actions -->
+                    <div class="bg-white p-6 rounded-2xl shadow-xs border border-slate-200 flex flex-col lg:flex-row lg:items-center lg:justify-between gap-4">
+                        <div>
+                            <div class="flex items-center space-x-3">
+                                <h3 id="ws-project-title" class="text-xl font-bold text-slate-800">Project Name</h3>
+                                <span id="ws-project-key" class="px-2.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-100">PRJ</span>
+                            </div>
+                            <p id="ws-project-desc" class="text-sm text-slate-500 mt-1">Project description goes here...</p>
+                        </div>
+                        <div class="flex flex-wrap items-center gap-3">
+                            <button onclick="openModal('create-issue-modal')" class="flex items-center space-x-2 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-sm font-medium shadow-sm transition">
+                                <i class="fa-solid fa-circle-plus"></i>
+                                <span>Create Issue</span>
+                            </button>
+                            <button onclick="openProjectStatsModal()" class="flex items-center space-x-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl text-sm font-medium transition">
+                                <i class="fa-solid fa-chart-pie text-indigo-600"></i>
+                                <span>Project Stats</span>
+                            </button>
+                            <button onclick="openProjectWorkloadModal()" class="flex items-center space-x-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl text-sm font-medium transition">
+                                <i class="fa-solid fa-users-rectangle text-indigo-600"></i>
+                                <span>Workload</span>
+                            </button>
+                            <button onclick="openAssignMemberModal()" class="flex items-center space-x-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 px-4 py-2 rounded-xl text-sm font-medium transition">
+                                <i class="fa-solid fa-user-plus text-indigo-600"></i>
+                                <span>Add Member</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Filter Bar -->
+                    <div class="bg-white p-4 rounded-2xl shadow-xs border border-slate-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3 items-end">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Status</label>
+                            <select id="filter-status" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-indigo-600">
+                                <option value="">All Statuses</option>
+                                <option value="OPEN">OPEN</option>
+                                <option value="IN_PROGRESS">IN_PROGRESS</option>
+                                <option value="RESOLVED">RESOLVED</option>
+                                <option value="CLOSED">CLOSED</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Priority</label>
+                            <select id="filter-priority" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-indigo-600">
+                                <option value="">All Priorities</option>
+                                <option value="LOW">LOW</option>
+                                <option value="MEDIUM">MEDIUM</option>
+                                <option value="HIGH">HIGH</option>
+                                <option value="CRITICAL">CRITICAL</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Type</label>
+                            <select id="filter-type" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-indigo-600">
+                                <option value="">All Types</option>
+                                <option value="BUG">BUG</option>
+                                <option value="FEATURE">FEATURE</option>
+                                <option value="TASK">TASK</option>
+                                <option value="STORY">STORY</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Assigned To (ID)</label>
+                            <input type="number" id="filter-assigned" placeholder="User ID" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-indigo-600">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-600 mb-1">Created By (ID)</label>
+                            <input type="number" id="filter-created" placeholder="User ID" class="w-full text-sm border border-slate-200 rounded-xl px-3 py-2 bg-slate-50 focus:outline-indigo-600">
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <button onclick="applyIssueFilters()" class="flex-1 bg-slate-800 hover:bg-slate-900 text-white text-sm font-medium py-2 rounded-xl transition">Filter</button>
+                            <button onclick="resetIssueFilters()" class="px-3 bg-slate-100 hover:bg-slate-200 text-slate-600 text-sm py-2 rounded-xl transition" title="Reset Filters"><i class="fa-solid fa-rotate-right"></i></button>
+                        </div>
+                    </div>
+
+                    <!-- Issues Table/List -->
+                    <div class="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+                        <div class="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                            <h4 class="font-bold text-slate-800 text-base">Project Issues</h4>
+                            <span id="issue-count-badge" class="text-xs bg-slate-100 text-slate-600 px-2.5 py-1 rounded-full font-medium">0 issues</span>
+                        </div>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs font-semibold uppercase tracking-wider">
+                                    <th class="py-3 px-6">ID & Title</th>
+                                    <th class="py-3 px-6">Type</th>
+                                    <th class="py-3 px-6">Priority</th>
+                                    <th class="py-3 px-6">Status</th>
+                                    <th class="py-3 px-6">Assigned User</th>
+                                    <th class="py-3 px-6 text-right">Actions</th>
+                                </tr>
+                                </thead>
+                                <tbody id="issues-table-body" class="divide-y divide-slate-100 text-sm">
+                                <!-- Populated via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 2: USERS -->
+            <section id="tab-users" class="space-y-6 hidden">
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Add User Form -->
+                    <div class="bg-white p-6 rounded-2xl shadow-xs border border-slate-200 h-fit space-y-4">
+                        <h3 class="text-lg font-bold text-slate-800">Add New User</h3>
+                        <p class="text-sm text-slate-500">Register a new team member with specific role privileges.</p>
+
+                        <form id="add-user-form" onsubmit="handleCreateUser(event)" class="space-y-4 pt-2">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Username / Name</label>
+                                <input type="text" id="new-user-name" required placeholder="e.g. John Doe" class="w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:outline-indigo-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">Email Address</label>
+                                <input type="email" id="new-user-email" required placeholder="john@company.com" class="w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:outline-indigo-600">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-700 mb-1">User Role</label>
+                                <select id="new-user-role" class="w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:outline-indigo-600">
+                                    <option value="DEVELOPER">DEVELOPER</option>
+                                    <option value="ADMIN">ADMIN</option>
+                                    <option value="MANAGER">MANAGER</option>
+                                    <option value="TESTER">TESTER</option>
+                                </select>
+                            </div>
+                            <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-xl text-sm shadow-sm transition">
+                                Create User
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- Users Table -->
+                    <div class="lg:col-span-2 bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden flex flex-col">
+                        <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+                            <div>
+                                <h3 class="text-lg font-bold text-slate-800">Team Directory</h3>
+                                <p class="text-sm text-slate-500">All registered users in the backend system.</p>
+                            </div>
+                            <button onclick="loadUsers()" class="p-2 border border-slate-200 hover:bg-slate-100 rounded-xl text-slate-600 transition">
+                                <i class="fa-solid fa-arrows-rotate"></i>
+                            </button>
+                        </div>
+                        <div class="overflow-x-auto flex-1">
+                            <table class="w-full text-left border-collapse">
+                                <thead>
+                                <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs font-semibold uppercase tracking-wider">
+                                    <th class="py-3 px-6">ID</th>
+                                    <th class="py-3 px-6">Name</th>
+                                    <th class="py-3 px-6">Email</th>
+                                    <th class="py-3 px-6">Role</th>
+                                </tr>
+                                </thead>
+                                <tbody id="users-table-body" class="divide-y divide-slate-100 text-sm">
+                                <!-- Populated via JS -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 3: ACTIVITY LOGS & VELOCITY -->
+            <section id="tab-activity" class="space-y-6 hidden">
+                <!-- Velocity Calculator Box -->
+                <div class="bg-indigo-900 text-white p-6 rounded-2xl shadow-lg relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-6">
+                    <div class="absolute -right-10 -bottom-10 text-indigo-800/40 pointer-events-none">
+                        <i class="fa-solid fa-bolt text-9xl"></i>
+                    </div>
+                    <div class="space-y-1 z-10">
+                        <h3 class="text-xl font-bold">Issue Velocity Calculator</h3>
+                        <p class="text-indigo-200 text-sm">Query issue velocity metrics based on threshold parameters.</p>
+                    </div>
+                    <div class="flex items-center space-x-3 z-10 w-full md:w-auto">
+                        <input type="number" id="velocity-input" value="5" placeholder="Velocity number" class="bg-indigo-950 border border-indigo-700 text-white text-sm rounded-xl px-4 py-2.5 w-36 focus:outline-none focus:border-indigo-400">
+                        <button onclick="fetchVelocityStats()" class="bg-white text-indigo-900 hover:bg-indigo-50 font-semibold px-5 py-2.5 rounded-xl text-sm shadow transition flex items-center space-x-2 whitespace-nowrap">
+                            <i class="fa-solid fa-calculator"></i>
+                            <span>Calculate</span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Velocity Stats Result Card -->
+                <div id="velocity-result-card" class="bg-white p-6 rounded-2xl shadow-xs border border-slate-200 hidden">
+                    <h4 class="text-sm font-semibold text-slate-500 uppercase tracking-wider mb-3">Velocity Stats Result</h4>
+                    <div id="velocity-result-content" class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <!-- Populated via JS -->
+                    </div>
+                </div>
+
+                <!-- Activity Logs Table -->
+                <div class="bg-white rounded-2xl shadow-xs border border-slate-200 overflow-hidden">
+                    <div class="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-bold text-slate-800">System Activity Logs</h3>
+                            <p class="text-sm text-slate-500">Audit trail of actions executed across projects and issues.</p>
+                        </div>
+                        <button onclick="loadActivityLogs()" class="p-2 border border-slate-200 hover:bg-slate-100 rounded-xl text-slate-600 transition">
+                            <i class="fa-solid fa-arrows-rotate"></i>
+                        </button>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                            <tr class="bg-slate-50 border-b border-slate-200 text-slate-500 text-xs font-semibold uppercase tracking-wider">
+                                <th class="py-3 px-6">Log ID</th>
+                                <th class="py-3 px-6">Action / Description</th>
+                                <th class="py-3 px-6">Timestamp</th>
+                            </tr>
+                            </thead>
+                            <tbody id="activity-table-body" class="divide-y divide-slate-100 text-sm">
+                            <!-- Populated via JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- TAB 4: API CONFIGURATION -->
+            <section id="tab-settings" class="space-y-6 hidden">
+                <div class="max-w-xl bg-white p-8 rounded-2xl shadow-xs border border-slate-200 space-y-6">
+                    <div>
+                        <h3 class="text-xl font-bold text-slate-800">API Configuration</h3>
+                        <p class="text-sm text-slate-500 mt-1">Configure the base URL of your Spring Boot backend REST endpoints.</p>
+                    </div>
+
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-semibold text-slate-700 mb-1">Backend Base URL</label>
+                            <div class="flex space-x-2">
+                                <input type="text" id="api-url-input" value="" placeholder="leave blank - same origin" class="flex-1 text-sm border border-slate-200 rounded-xl px-4 py-2.5 bg-slate-50 focus:outline-indigo-600">
+                                <button onclick="saveApiUrl()" class="bg-indigo-600 hover:bg-indigo-700 text-white font-medium px-5 py-2.5 rounded-xl text-sm shadow-sm transition">Save</button>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-1.5">Blank means same-origin — the backend serves this page, so /api calls go right back to it. Only set this if you're loading the page from somewhere else.</p>
+                        </div>
+
+                        <div class="pt-4 border-t border-slate-100 space-y-3">
+                            <h4 class="text-sm font-bold text-slate-700">Quick Connection Test</h4>
+                            <p class="text-xs text-slate-500">Click below to test connection against GET /api/users or GET /api/projects.</p>
+                            <button onclick="testConnection()" class="w-full bg-slate-100 hover:bg-slate-200 text-slate-800 font-medium py-2.5 rounded-xl text-sm transition flex items-center justify-center space-x-2">
+                                <i class="fa-solid fa-plug text-indigo-600"></i>
+                                <span>Test REST API Connection</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </div>
+    </main>
+</div>
+
+<!-- MODALS CONTAINER -->
+
+<!-- Modal: Create Project -->
+<div id="create-project-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 class="font-bold text-lg text-slate-800">Create New Project</h3>
+            <button onclick="closeModal('create-project-modal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+        <form id="create-project-form" onsubmit="handleCreateProject(event)" class="space-y-4">
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Project Name</label>
+                <input type="text" id="project-name" required placeholder="e.g. Cloud Migration" class="w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:outline-indigo-600">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Description</label>
+                <textarea id="project-desc" rows="3" required placeholder="Detailed project overview..." class="w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:outline-indigo-600"></textarea>
+            </div>
+            <div class="flex justify-end space-x-3 pt-2">
+                <button type="button" onclick="closeModal('create-project-modal')" class="px-4 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition">Cancel</button>
+                <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-sm transition">Create Project</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Create Issue -->
+<div id="create-issue-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 class="font-bold text-lg text-slate-800">Create New Issue</h3>
+            <button onclick="closeModal('create-issue-modal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+        <form id="create-issue-form" onsubmit="handleCreateIssue(event)" class="space-y-4">
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Issue Title</label>
+                <input type="text" id="issue-title" required placeholder="e.g. Fix login button error on Safari" class="w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:outline-indigo-600">
+            </div>
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Description</label>
+                <textarea id="issue-desc" rows="3" required placeholder="Detailed reproduction steps..." class="w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:outline-indigo-600"></textarea>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Issue Type</label>
+                    <select id="issue-type" class="w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:outline-indigo-600">
+                        <option value="BUG">BUG</option>
+                        <option value="FEATURE">FEATURE</option>
+                        <option value="TASK">TASK</option>
+                        <option value="STORY">STORY</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Issue Priority</label>
+                    <select id="issue-priority" class="w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:outline-indigo-600">
+                        <option value="MEDIUM">MEDIUM</option>
+                        <option value="LOW">LOW</option>
+                        <option value="HIGH">HIGH</option>
+                        <option value="CRITICAL">CRITICAL</option>
+                    </select>
+                </div>
+            </div>
+            <div class="grid grid-cols-2 gap-4">
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Reporter <span class="text-rose-500">*</span></label>
+                    <select id="issue-reporter-select" required class="w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:outline-indigo-600">
+                        <!-- Populated via JS -->
+                    </select>
+                    <p class="text-[11px] text-slate-400 mt-1">Required by the backend (reporterId).</p>
+                </div>
+                <div>
+                    <label class="block text-xs font-semibold text-slate-700 mb-1">Assignee (optional)</label>
+                    <select id="issue-assignee-select" class="w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:outline-indigo-600">
+                        <option value="">Unassigned</option>
+                    </select>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 pt-2">
+                <button type="button" onclick="closeModal('create-issue-modal')" class="px-4 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition">Cancel</button>
+                <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-sm transition">Create Issue</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Assign Member to Project -->
+<div id="assign-member-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 class="font-bold text-lg text-slate-800">Assign Member to Project</h3>
+            <button onclick="closeModal('assign-member-modal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+        <form onsubmit="handleAssignMember(event)" class="space-y-4">
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Select User</label>
+                <select id="assign-user-select" class="w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:outline-indigo-600">
+                    <!-- Populated via JS -->
+                </select>
+            </div>
+            <div class="flex justify-end space-x-3 pt-2">
+                <button type="button" onclick="closeModal('assign-member-modal')" class="px-4 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition">Cancel</button>
+                <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-sm transition">Assign User</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Assign User to Issue -->
+<div id="assign-issue-user-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-6 space-y-5">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 class="font-bold text-lg text-slate-800">Assign Issue to User</h3>
+            <button onclick="closeModal('assign-issue-user-modal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+        <form onsubmit="handleAssignIssueUser(event)" class="space-y-4">
+            <input type="hidden" id="modal-target-issue-id">
+            <div>
+                <label class="block text-xs font-semibold text-slate-700 mb-1">Select User</label>
+                <select id="assign-issue-user-select" class="w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2.5 bg-slate-50 focus:outline-indigo-600">
+                    <!-- Populated via JS -->
+                </select>
+            </div>
+            <div class="flex justify-end space-x-3 pt-2">
+                <button type="button" onclick="closeModal('assign-issue-user-modal')" class="px-4 py-2 border border-slate-200 rounded-xl text-sm font-medium text-slate-600 hover:bg-slate-50 transition">Cancel</button>
+                <button type="submit" class="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-medium shadow-sm transition">Assign</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Comments Drawer / Modal -->
+<div id="comments-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-xl w-full p-6 space-y-5 max-h-[85vh] flex flex-col">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3 flex-shrink-0">
+            <div>
+                <h3 class="font-bold text-lg text-slate-800">Issue Comments</h3>
+                <p class="text-xs text-slate-500" id="comments-subtitle">Discussion thread</p>
+            </div>
+            <button onclick="closeModal('comments-modal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+
+        <!-- Comments List -->
+        <div id="comments-list-container" class="flex-1 overflow-y-auto space-y-3 pr-2 divide-y divide-slate-100">
+            <div class="text-center py-6 text-slate-400 text-sm">Loading comments...</div>
+        </div>
+
+        <!-- Add Comment Form -->
+        <form onsubmit="handlePostComment(event)" class="pt-3 border-t border-slate-100 flex-shrink-0 space-y-2">
+            <input type="hidden" id="active-comment-issue-id">
+            <select id="comment-author-select" required class="w-full text-sm border border-slate-200 rounded-xl px-3.5 py-2 bg-slate-50 focus:outline-indigo-600">
+                <!-- Populated via JS -->
+            </select>
+            <div class="flex space-x-2">
+                <input type="text" id="new-comment-content" required placeholder="Write a comment..." class="flex-1 text-sm border border-slate-200 rounded-xl px-4 py-2.5 bg-slate-50 focus:outline-indigo-600">
+                <button type="submit" class="bg-indigo-600 hover:bg-indigo-700 text-white px-5 py-2.5 rounded-xl text-sm font-medium transition shadow-sm">Post</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- Modal: Project Stats & Workload -->
+<div id="info-modal" class="fixed inset-0 bg-slate-900/50 backdrop-blur-xs z-50 hidden flex items-center justify-center p-4">
+    <div class="bg-white rounded-2xl shadow-2xl max-w-xl w-full p-6 space-y-5 max-h-[85vh] overflow-y-auto">
+        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+            <h3 id="info-modal-title" class="font-bold text-lg text-slate-800">Project Stats</h3>
+            <button onclick="closeModal('info-modal')" class="text-slate-400 hover:text-slate-600"><i class="fa-solid fa-xmark text-lg"></i></button>
+        </div>
+        <div id="info-modal-body" class="space-y-4">
+            <!-- Content injected via JS -->
+        </div>
+    </div>
+</div>
+
+<!-- JAVASCRIPT LOGIC -->
+<script>
+    let API_BASE_URL = localStorage.getItem('jira_api_url') || '';
+    document.getElementById('api-url-input').value = API_BASE_URL;
+    document.getElementById('sidebar-api-url').textContent = API_BASE_URL;
+
+    let selectedProjectId = null;
+    let selectedProjectName = '';
+    let cachedUsers = [];
+
+    // Tab Switching Logic
+    function switchTab(tabId) {
+        ['projects', 'users', 'activity', 'settings'].forEach(id => {
+            document.getElementById(`tab-${id}`).classList.add('hidden');
+            const navBtn = document.getElementById(`nav-${id}`);
+            navBtn.className = "w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all text-slate-400 hover:bg-slate-800 hover:text-white";
+        });
+
+        document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+        const activeBtn = document.getElementById(`nav-${tabId}`);
+        activeBtn.className = "w-full flex items-center space-x-3 px-4 py-3 rounded-xl text-sm font-medium transition-all bg-indigo-600 text-white shadow-md shadow-indigo-900/30";
+
+        const titleMap = {
+            'projects': selectedProjectId ? 'Project Workspace' : 'Projects Workspace',
+            'users': 'Users & Team Management',
+            'activity': 'Activity Logs & Velocity',
+            'settings': 'API Configuration'
+        };
+        document.getElementById('current-page-title').textContent = titleMap[tabId];
+
+        if (tabId === 'projects' && !selectedProjectId) {
+            loadProjects();
+        } else if (tabId === 'users') {
+            loadUsers();
+        } else if (tabId === 'activity') {
+            loadActivityLogs();
+        }
+    }
+
+    // Toast Notification System
+    function showToast(message, type = 'success') {
+        const container = document.getElementById('toast-container');
+        const toast = document.createElement('div');
+        const bgClass = type === 'success' ? 'bg-slate-900 text-white border-l-4 border-emerald-500' : 'bg-rose-900 text-white border-l-4 border-rose-500';
+        const icon = type === 'success' ? 'fa-circle-check text-emerald-400' : 'fa-circle-exclamation text-rose-400';
+
+        toast.className = `pointer-events-auto flex items-center space-x-3 px-4 py-3 rounded-xl shadow-xl text-sm font-medium transform transition-all duration-300 translate-y-2 opacity-0 ${bgClass}`;
+        toast.innerHTML = `<i class="fa-solid ${icon} text-base"></i><span>${message}</span>`;
+
+        container.appendChild(toast);
+        setTimeout(() => toast.classList.remove('translate-y-2', 'opacity-0'), 10);
+
+        setTimeout(() => {
+            toast.classList.add('translate-y-2', 'opacity-0');
+            setTimeout(() => toast.remove(), 300);
+        }, 3500);
+    }
+
+    // API Connection Tester
+    async function testConnection() {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/users`, { method: 'GET' });
+            if (res.ok) {
+                document.getElementById('api-status-badge').className = "px-2 py-0.5 rounded bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 font-semibold";
+                document.getElementById('api-status-badge').textContent = "Connected";
+                showToast("Successfully connected to Spring Boot backend!", "success");
+            } else {
+                throw new Error("Server responded with status " + res.status);
+            }
+        } catch (err) {
+            document.getElementById('api-status-badge').className = "px-2 py-0.5 rounded bg-rose-500/10 text-rose-400 border border-rose-500/20 font-semibold";
+            document.getElementById('api-status-badge').textContent = "Offline";
+            showToast("Connection failed: " + err.message, "error");
+        }
+    }
+
+    function saveApiUrl() {
+        const val = document.getElementById('api-url-input').value.trim();
+        if (!val) return showToast("Please enter a valid URL", "error");
+        API_BASE_URL = val.endsWith('/') ? val.slice(0, -1) : val;
+        localStorage.setItem('jira_api_url', API_BASE_URL);
+        document.getElementById('sidebar-api-url').textContent = API_BASE_URL;
+        showToast("API URL saved successfully!");
+        testConnection();
+    }
+
+    // Modal Controls
+    function openModal(modalId) {
+        document.getElementById(modalId).classList.remove('hidden');
+        if (['assign-member-modal', 'assign-issue-user-modal', 'create-issue-modal', 'comments-modal'].includes(modalId)) {
+            populateUserDropdowns();
+        }
+    }
+
+    function closeModal(modalId) {
+        document.getElementById(modalId).classList.add('hidden');
+    }
+
+    async function loadProjects() {
+        const grid = document.getElementById('projects-grid');
+        grid.innerHTML = `<div class="col-span-full py-12 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin text-2xl mb-2"></i><p>Loading projects...</p></div>`;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/projects`, { method: 'GET' });
+            if (!res.ok) throw new Error("Failed to fetch projects");
+            const projects = await res.json();
+
+            if (projects.length === 0) {
+                grid.innerHTML = `<div class="col-span-full py-12 text-center text-slate-400 bg-white rounded-2xl border border-slate-200"><i class="fa-solid fa-folder-open text-3xl mb-2 text-slate-300"></i><p>No projects found. Create your first project!</p></div>`;
+                return;
+            }
+
+            grid.innerHTML = projects.map(p => `
+                    <div class="bg-white rounded-2xl p-6 border border-slate-200 shadow-xs hover:shadow-md transition flex flex-col justify-between space-y-4">
+                        <div>
+                            <div class="flex items-start justify-between">
+                                <span class="px-2.5 py-1 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-lg border border-indigo-100">PRJ-${p.projectID ?? ''}</span>
+                                <span class="text-xs text-slate-400">ID: ${p.projectID}</span>
+                            </div>
+                            <h4 class="font-bold text-slate-800 text-lg mt-3">${escapeHtml(p.projectName || 'Untitled Project')}</h4>
+                            <p class="text-sm text-slate-500 mt-1 line-clamp-2">${escapeHtml(p.projectDescription || 'No description provided.')}</p>
+                        </div>
+                        <div class="pt-4 border-t border-slate-100 flex items-center justify-between">
+                            <button onclick="selectProject(${p.projectID}, '${escapeHtml(p.projectName || '')}')" class="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-4 py-2 rounded-xl text-xs font-semibold transition flex items-center space-x-1.5">
+                                <span>Open Issues</span>
+                                <i class="fa-solid fa-arrow-right"></i>
+                            </button>
+                            <div class="flex space-x-1">
+                                <button onclick="quickProjectStats(${p.projectID}, '${escapeHtml(p.projectName || '')}')" title="Stats" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition"><i class="fa-solid fa-chart-pie"></i></button>
+                                <button onclick="quickProjectWorkload(${p.projectID}, '${escapeHtml(p.projectName || '')}')" title="Workload" class="p-2 text-slate-400 hover:text-indigo-600 hover:bg-slate-50 rounded-lg transition"><i class="fa-solid fa-users-rectangle"></i></button>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+        } catch (err) {
+            grid.innerHTML = `<div class="col-span-full py-12 text-center text-rose-500 bg-white rounded-2xl border border-slate-200"><i class="fa-solid fa-triangle-exclamation text-2xl mb-2"></i><p>Error loading projects: ${err.message}</p></div>`;
+        }
+    }
+
+    async function handleCreateProject(e) {
+        e.preventDefault();
+        const name = document.getElementById('project-name').value;
+        const description = document.getElementById('project-desc').value;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/projects`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ projectName: name, projectDescription: description })
+            });
+            if (!res.ok) throw new Error("Failed to create project");
+
+            showToast("Project created successfully!");
+            closeModal('create-project-modal');
+            document.getElementById('create-project-form').reset();
+            loadProjects();
+        } catch (err) {
+            showToast("Error: " + err.message, "error");
+        }
+    }
+
+    function selectProject(id, name) {
+        selectedProjectId = id;
+        selectedProjectName = name;
+        document.getElementById('projects-view-container').classList.add('hidden');
+        document.getElementById('issues-workspace-container').classList.remove('hidden');
+        document.getElementById('current-project-breadcrumb').classList.remove('hidden');
+        document.getElementById('current-project-breadcrumb').classList.add('flex');
+        document.getElementById('breadcrumb-project-name').textContent = name;
+        document.getElementById('ws-project-title').textContent = name;
+        document.getElementById('ws-project-desc').textContent = `Managing issues and tasks for project #${id}`;
+        document.getElementById('ws-project-key').textContent = `PRJ-${id}`;
+
+        loadIssuesForProject(id);
+    }
+
+    function clearSelectedProject() {
+        selectedProjectId = null;
+        selectedProjectName = '';
+        document.getElementById('issues-workspace-container').classList.add('hidden');
+        document.getElementById('projects-view-container').classList.remove('hidden');
+        document.getElementById('current-project-breadcrumb').classList.add('hidden');
+        document.getElementById('current-project-breadcrumb').classList.remove('flex');
+        document.getElementById('current-page-title').textContent = 'Projects Workspace';
+        loadProjects();
+    }
+
+    async function loadIssuesForProject(projectId) {
+        const tbody = document.getElementById('issues-table-body');
+        tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading issues...</td></tr>`;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/issues/getIssues/${projectId}`);
+            if (!res.ok) throw new Error("Failed to load issues");
+            const issues = await res.json();
+            renderIssuesTable(issues);
+        } catch (err) {
+            tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-rose-500"><i class="fa-solid fa-triangle-exclamation mr-2"></i>Error: ${err.message}</td></tr>`;
+        }
+    }
+
+    function renderIssuesTable(issues) {
+        const tbody = document.getElementById('issues-table-body');
+        document.getElementById('issue-count-badge').textContent = `${issues.length} issues`;
+
+        if (issues.length === 0) {
+            tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400">No issues found matching criteria.</td></tr>`;
+            return;
+        }
+
+        tbody.innerHTML = issues.map(i => {
+            const statusBadge = getStatusBadge(i.status || i.issueStatus);
+            const priorityBadge = getPriorityBadge(i.priority || i.issuePriority);
+            const typeBadge = getTypeBadge(i.type || i.issueType);
+            const assigneeName = i.assigneeName
+                ? escapeHtml(i.assigneeName)
+                : '<span class="text-slate-400 italic">Unassigned</span>';
+
+            return `
+                    <tr class="hover:bg-slate-50/80 transition">
+                        <td class="py-3.5 px-6">
+                            <span class="text-xs font-bold text-slate-400 mr-2">#${i.id}</span>
+                            <span class="font-semibold text-slate-800">${escapeHtml(i.title || 'Untitled')}</span>
+                            <p class="text-xs text-slate-500 line-clamp-1 mt-0.5">${escapeHtml(i.description || '')}</p>
+                        </td>
+                        <td class="py-3.5 px-6">${typeBadge}</td>
+                        <td class="py-3.5 px-6">${priorityBadge}</td>
+                        <td class="py-3.5 px-6">${statusBadge}</td>
+                        <td class="py-3.5 px-6 text-slate-600 font-medium">${assigneeName}</td>
+                        <td class="py-3.5 px-6 text-right space-x-1">
+                            <button onclick="updateIssueStatus(${i.id})" title="Advance Status" class="p-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-slate-600 transition"><i class="fa-solid fa-forward-step"></i></button>
+                            <button onclick="openAssignIssueUserModal(${i.id})" title="Assign User" class="p-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-slate-600 transition"><i class="fa-solid fa-user-tag"></i></button>
+                            <button onclick="openCommentsModal(${i.id}, '${escapeHtml(i.title || 'Issue')}')" title="Comments" class="p-1.5 bg-slate-100 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg text-slate-600 transition"><i class="fa-solid fa-comments"></i></button>
+                        </td>
+                    </tr>
+                `;
+        }).join('');
+    }
+
+    async function applyIssueFilters() {
+        if (!selectedProjectId) return;
+        const status = document.getElementById('filter-status').value;
+        const priority = document.getElementById('filter-priority').value;
+        const type = document.getElementById('filter-type').value;
+        const assignedTo = document.getElementById('filter-assigned').value;
+        const createdBy = document.getElementById('filter-created').value;
+
+        if (!status && !priority && !type && !assignedTo && !createdBy) {
+            loadIssuesForProject(selectedProjectId);
+            return;
+        }
+
+        const queryParams = new URLSearchParams();
+        if (status) queryParams.append('status', status);
+        if (priority) queryParams.append('priority', priority);
+        if (type) queryParams.append('type', type);
+        if (assignedTo) queryParams.append('assignedTo', assignedTo);
+        if (createdBy) queryParams.append('createdBy', createdBy);
+
+        const tbody = document.getElementById('issues-table-body');
+        tbody.innerHTML = `<tr><td colspan="6" class="py-8 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Filtering issues...</td></tr>`;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/issues/filter?${queryParams.toString()}`);
+            if (!res.ok) throw new Error("Failed to filter issues");
+            const issues = await res.json();
+            renderIssuesTable(issues);
+        } catch (err) {
+            showToast("Filter error: " + err.message, "error");
+        }
+    }
+
+    function resetIssueFilters() {
+        document.getElementById('filter-status').value = '';
+        document.getElementById('filter-priority').value = '';
+        document.getElementById('filter-type').value = '';
+        document.getElementById('filter-assigned').value = '';
+        document.getElementById('filter-created').value = '';
+        if (selectedProjectId) loadIssuesForProject(selectedProjectId);
+    }
+
+    async function handleCreateIssue(e) {
+        e.preventDefault();
+        if (!selectedProjectId) return;
+
+        const title = document.getElementById('issue-title').value;
+        const description = document.getElementById('issue-desc').value;
+        const issueType = document.getElementById('issue-type').value;
+        const issuePriority = document.getElementById('issue-priority').value;
+        const reporterId = document.getElementById('issue-reporter-select').value;
+        const assigneeId = document.getElementById('issue-assignee-select').value;
+
+        if (!reporterId) return showToast("Reporter is required", "error");
+
+        const url = `${API_BASE_URL}/api/issues/${selectedProjectId}?issueType=${issueType}&issuePriority=${issuePriority}`;
+
+        // Field names below must match IssueInputDTO exactly: title, description,
+        // reporterId (required), assigneeId (optional).
+        const payload = {
+            title,
+            description,
+            reporterId: Number(reporterId)
+        };
+        if (assigneeId) payload.assigneeId = Number(assigneeId);
+
+        try {
+            const res = await fetch(url, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!res.ok) throw new Error("Failed to create issue");
+
+            showToast("Issue created successfully!");
+            closeModal('create-issue-modal');
+            document.getElementById('create-issue-form').reset();
+            loadIssuesForProject(selectedProjectId);
+        } catch (err) {
+            showToast("Error: " + err.message, "error");
+        }
+    }
+
+    async function updateIssueStatus(issueId) {
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/issues/updateStatus/${issueId}`, { method: 'PATCH' });
+            if (!res.ok) throw new Error("Failed to update status");
+            showToast("Issue status updated!");
+            loadIssuesForProject(selectedProjectId);
+        } catch (err) {
+            showToast("Error: " + err.message, "error");
+        }
+    }
+
+    function openAssignIssueUserModal(issueId) {
+        document.getElementById('modal-target-issue-id').value = issueId;
+        openModal('assign-issue-user-modal');
+    }
+
+    async function handleAssignIssueUser(e) {
+        e.preventDefault();
+        const issueId = document.getElementById('modal-target-issue-id').value;
+        const userId = document.getElementById('assign-issue-user-select').value;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/issues/assign/${issueId}?userId=${userId}`, { method: 'POST' });
+            if (!res.ok) throw new Error("Failed to assign user");
+            showToast("User assigned to issue successfully!");
+            closeModal('assign-issue-user-modal');
+            loadIssuesForProject(selectedProjectId);
+        } catch (err) {
+            showToast("Error: " + err.message, "error");
+        }
+    }
+
+    // Comments management
+    async function openCommentsModal(issueId, issueTitle) {
+        document.getElementById('active-comment-issue-id').value = issueId;
+        document.getElementById('comments-subtitle').textContent = `Discussion for: ${issueTitle} (#${issueId})`;
+        openModal('comments-modal');
+        loadCommentsForIssue(issueId);
+    }
+
+    async function loadCommentsForIssue(issueId) {
+        const container = document.getElementById('comments-list-container');
+        container.innerHTML = `<div class="text-center py-6 text-slate-400 text-sm"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading comments...</div>`;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/comments/comments/${issueId}`);
+            if (!res.ok) throw new Error("Failed to fetch comments");
+            const comments = await res.json();
+
+            if (comments.length === 0) {
+                container.innerHTML = `<div class="text-center py-8 text-slate-400 text-sm">No comments yet. Be the first to comment!</div>`;
+                return;
+            }
+
+            container.innerHTML = comments.map(c => `
+                    <div class="py-3">
+                        <div class="flex items-center justify-between text-xs text-slate-400 mb-1">
+                            <span class="font-semibold text-slate-700">${escapeHtml(c.authorName || 'User')}</span>
+                            <span>${c.createAt ? new Date(c.createAt).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : ''}</span>
+                        </div>
+                        <p class="text-sm text-slate-600 bg-slate-50 p-3 rounded-xl border border-slate-100">${escapeHtml(c.message || '')}</p>
+                    </div>
+                `).join('');
+        } catch (err) {
+            container.innerHTML = `<div class="text-center py-6 text-rose-500 text-sm">Error loading comments: ${err.message}</div>`;
+        }
+    }
+
+    async function handlePostComment(e) {
+        e.preventDefault();
+        const issueId = document.getElementById('active-comment-issue-id').value;
+        const message = document.getElementById('new-comment-content').value;
+        const userID = document.getElementById('comment-author-select').value;
+
+        if (!userID) return showToast("Pick who's posting this comment", "error");
+
+        // Field names below must match CommentInputDTO exactly: message, userID.
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/comments/${issueId}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message, userID: Number(userID) })
+            });
+            if (!res.ok) throw new Error("Failed to post comment");
+
+            showToast("Comment posted!");
+            document.getElementById('new-comment-content').value = '';
+            loadCommentsForIssue(issueId);
+        } catch (err) {
+            showToast("Error: " + err.message, "error");
+        }
+    }
+
+    async function loadUsers() {
+        const tbody = document.getElementById('users-table-body');
+        tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading users...</td></tr>`;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/users`);
+            if (!res.ok) throw new Error("Failed to fetch users");
+            cachedUsers = await res.json();
+
+            if (cachedUsers.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-slate-400">No users found. Register a user above.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = cachedUsers.map(u => `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="py-3.5 px-6 font-semibold text-slate-400">#${u.userId}</td>
+                        <td class="py-3.5 px-6 font-semibold text-slate-800">${escapeHtml(u.userName || '')}</td>
+                        <td class="py-3.5 px-6 text-slate-600">${escapeHtml(u.userEmail || '')}</td>
+                        <td class="py-3.5 px-6"><span class="px-2.5 py-1 rounded-full text-xs font-bold ${getRoleBadgeClass(u.userRole)}">${u.userRole || 'USER'}</span></td>
+                    </tr>
+                `).join('');
+        } catch (err) {
+            tbody.innerHTML = `<tr><td colspan="4" class="py-8 text-center text-rose-500">Error loading users: ${err.message}</td></tr>`;
+        }
+    }
+
+    async function handleCreateUser(e) {
+        e.preventDefault();
+        const name = document.getElementById('new-user-name').value;
+        const email = document.getElementById('new-user-email').value;
+        const role = document.getElementById('new-user-role').value;
+
+        // Field names below must match UserInputDTO exactly: userName, userEmail.
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/users?userRole=${role}`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ userName: name, userEmail: email })
+            });
+            if (!res.ok) throw new Error("Failed to create user");
+
+            showToast("User created successfully!");
+            document.getElementById('add-user-form').reset();
+            loadUsers();
+        } catch (err) {
+            showToast("Error: " + err.message, "error");
+        }
+    }
+
+    async function populateUserDropdowns() {
+        if (cachedUsers.length === 0) {
+            try {
+                const res = await fetch(`${API_BASE_URL}/api/users`);
+                if (res.ok) cachedUsers = await res.json();
+            } catch (e) {}
+        }
+
+        // Field names below come from UserOutputDTO: userId, userName, userRole.
+        const optionsHTML = cachedUsers.map(u => `<option value="${u.userId}">${escapeHtml(u.userName)} (#${u.userId} - ${u.userRole || 'USER'})</option>`).join('');
+        const fallback = '<option value="">No users available</option>';
+
+        const assignSelect = document.getElementById('assign-user-select');
+        if (assignSelect) assignSelect.innerHTML = optionsHTML || fallback;
+
+        const assignIssueSelect = document.getElementById('assign-issue-user-select');
+        if (assignIssueSelect) assignIssueSelect.innerHTML = optionsHTML || fallback;
+
+        const reporterSelect = document.getElementById('issue-reporter-select');
+        if (reporterSelect) reporterSelect.innerHTML = optionsHTML || fallback;
+
+        const issueAssigneeSelect = document.getElementById('issue-assignee-select');
+        if (issueAssigneeSelect) issueAssigneeSelect.innerHTML = '<option value="">Unassigned</option>' + optionsHTML;
+
+        const commentAuthorSelect = document.getElementById('comment-author-select');
+        if (commentAuthorSelect) commentAuthorSelect.innerHTML = optionsHTML || fallback;
+    }
+
+    function openAssignMemberModal() {
+        openModal('assign-member-modal');
+    }
+
+    async function handleAssignMember(e) {
+        e.preventDefault();
+        if (!selectedProjectId) return;
+        const userId = document.getElementById('assign-user-select').value;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/projects/assign/${selectedProjectId}/to/${userId}`, { method: 'POST' });
+            if (!res.ok) throw new Error("Failed to assign member");
+            showToast("User assigned to project successfully!");
+            closeModal('assign-member-modal');
+        } catch (err) {
+            showToast("Error: " + err.message, "error");
+        }
+    }
+
+    async function openProjectStatsModal() {
+        if (!selectedProjectId) return;
+        document.getElementById('info-modal-title').textContent = `Project Stats: ${selectedProjectName}`;
+        const body = document.getElementById('info-modal-body');
+        body.innerHTML = `<div class="text-center py-6 text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading statistics...</div>`;
+        openModal('info-modal');
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/projects/stats/${selectedProjectId}`);
+            if (!res.ok) throw new Error("Failed to fetch project stats");
+            const stats = await res.json();
+
+            body.innerHTML = `
+                    <div class="grid grid-cols-2 gap-4">
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                            <span class="text-xs text-slate-500 font-semibold uppercase">Total Issues</span>
+                            <div class="text-2xl font-bold text-slate-800 mt-1">${stats.totalIssues || stats.total || 0}</div>
+                        </div>
+                        <div class="bg-slate-50 p-4 rounded-xl border border-slate-200">
+                            <span class="text-xs text-slate-500 font-semibold uppercase">Resolved Issues</span>
+                            <div class="text-2xl font-bold text-emerald-600 mt-1">${stats.resolvedIssues || stats.resolved || 0}</div>
+                        </div>
+                    </div>
+                    <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100 text-indigo-900">
+                        <h4 class="font-bold text-sm mb-1">Raw Stats Response</h4>
+                        <pre class="text-xs overflow-x-auto">${JSON.stringify(stats, null, 2)}</pre>
+                    </div>
+                `;
+        } catch (err) {
+            body.innerHTML = `<div class="text-rose-500 text-center py-4">Error loading stats: ${err.message}</div>`;
+        }
+    }
+
+    async function openProjectWorkloadModal() {
+        if (!selectedProjectId) return;
+        document.getElementById('info-modal-title').textContent = `User Workload: ${selectedProjectName}`;
+        const body = document.getElementById('info-modal-body');
+        body.innerHTML = `<div class="text-center py-6 text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading workload...</div>`;
+        openModal('info-modal');
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/projects/workload/${selectedProjectId}`);
+            if (!res.ok) throw new Error("Failed to fetch workload");
+            const workload = await res.json();
+
+            if (!Array.isArray(workload) || workload.length === 0) {
+                body.innerHTML = `<div class="text-center py-6 text-slate-400">No workload data available for this project.</div>`;
+                return;
+            }
+
+            body.innerHTML = `
+                    <div class="space-y-3">
+                        ${workload.map(w => `
+                            <div class="bg-slate-50 p-4 rounded-xl border border-slate-200 flex items-center justify-between">
+                                <div>
+                                    <h4 class="font-bold text-slate-800">${escapeHtml(w.userName || `User #${w.userId || ''}`)}</h4>
+                                    <p class="text-xs text-slate-500">Assigned Issues · Workload Score ${w.workloadScore ?? 0}</p>
+                                </div>
+                                <span class="px-3 py-1 bg-indigo-600 text-white rounded-lg font-bold text-sm">${w.totalIssues ?? 0}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+                `;
+        } catch (err) {
+            body.innerHTML = `<div class="text-rose-500 text-center py-4">Error loading workload: ${err.message}</div>`;
+        }
+    }
+
+    async function quickProjectStats(id, name) {
+        selectedProjectId = id;
+        selectedProjectName = name;
+        openProjectStatsModal();
+    }
+
+    async function quickProjectWorkload(id, name) {
+        selectedProjectId = id;
+        selectedProjectName = name;
+        openProjectWorkloadModal();
+    }
+
+    async function loadActivityLogs() {
+        const tbody = document.getElementById('activity-table-body');
+        tbody.innerHTML = `<tr><td colspan="3" class="py-8 text-center text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Loading activity logs...</td></tr>`;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/activity-logs`);
+            if (!res.ok) throw new Error("Failed to fetch activity logs");
+            const logs = await res.json();
+
+            if (logs.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="3" class="py-8 text-center text-slate-400">No activity logs recorded yet.</td></tr>`;
+                return;
+            }
+
+            tbody.innerHTML = logs.map(l => `
+                    <tr class="hover:bg-slate-50 transition">
+                        <td class="py-3.5 px-6 font-semibold text-slate-400">#${l.id}</td>
+                        <td class="py-3.5 px-6 text-slate-800 font-medium">${escapeHtml(l.action || l.description || l.message || JSON.stringify(l))}</td>
+                        <td class="py-3.5 px-6 text-slate-500 text-xs">${l.timestamp ? new Date(l.timestamp).toLocaleString() : 'N/A'}</td>
+                    </tr>
+                `).join('');
+        } catch (err) {
+            tbody.innerHTML = `<tr><td colspan="3" class="py-8 text-center text-rose-500">Error loading activity logs: ${err.message}</td></tr>`;
+        }
+    }
+
+    async function fetchVelocityStats() {
+        const velocity = document.getElementById('velocity-input').value;
+        if (!velocity) return showToast("Please enter a velocity number", "error");
+
+        const card = document.getElementById('velocity-result-card');
+        const content = document.getElementById('velocity-result-content');
+        card.classList.remove('hidden');
+        content.innerHTML = `<div class="col-span-3 text-center py-4 text-slate-400"><i class="fa-solid fa-spinner fa-spin mr-2"></i>Calculating velocity stats...</div>`;
+
+        try {
+            const res = await fetch(`${API_BASE_URL}/api/activity-logs/velocity/${velocity}`);
+            if (!res.ok) throw new Error("Failed to fetch velocity stats");
+            const stats = await res.json();
+
+            content.innerHTML = `
+                    <div class="bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
+                        <span class="text-xs font-semibold text-indigo-600 uppercase">Input Velocity</span>
+                        <div class="text-xl font-bold text-indigo-900 mt-1">${velocity}</div>
+                    </div>
+                    <div class="col-span-2 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                        <span class="text-xs font-semibold text-slate-500 uppercase">Velocity Stats Data</span>
+                        <pre class="text-xs text-slate-800 mt-1 overflow-x-auto">${JSON.stringify(stats, null, 2)}</pre>
+                    </div>
+                `;
+            showToast("Velocity stats calculated!");
+        } catch (err) {
+            content.innerHTML = `<div class="col-span-3 text-rose-500 text-center py-4">Error: ${err.message}</div>`;
+        }
+    }
+
+    // Helper UI Badges & Escaping
+    function getStatusBadge(status) {
+        const s = (status || '').toUpperCase();
+        let cls = 'bg-slate-100 text-slate-700 border-slate-200';
+        if (s === 'OPEN') cls = 'bg-amber-50 text-amber-700 border-amber-200';
+        else if (s === 'IN_PROGRESS') cls = 'bg-blue-50 text-blue-700 border-blue-200';
+        else if (s === 'RESOLVED') cls = 'bg-emerald-50 text-emerald-700 border-emerald-200';
+        else if (s === 'CLOSED') cls = 'bg-purple-50 text-purple-700 border-purple-200';
+        return `<span class="px-2.5 py-1 rounded-md text-xs font-bold border ${cls}">${s || 'OPEN'}</span>`;
+    }
+
+    function getPriorityBadge(priority) {
+        const p = (priority || '').toUpperCase();
+        let cls = 'text-slate-600 bg-slate-100';
+        if (p === 'CRITICAL') cls = 'text-rose-700 bg-rose-50 border border-rose-200';
+        else if (p === 'HIGH') cls = 'text-orange-700 bg-orange-50 border border-orange-200';
+        else if (p === 'MEDIUM') cls = 'text-blue-700 bg-blue-50 border border-blue-200';
+        else if (p === 'LOW') cls = 'text-emerald-700 bg-emerald-50 border border-emerald-200';
+        return `<span class="px-2 py-0.5 rounded text-xs font-bold ${cls}">${p || 'MEDIUM'}</span>`;
+    }
+
+    function getTypeBadge(type) {
+        const t = (type || '').toUpperCase();
+        let icon = 'fa-circle-dot text-slate-500';
+        if (t === 'BUG') icon = 'fa-bug text-rose-500';
+        else if (t === 'FEATURE') icon = 'fa-star text-amber-500';
+        else if (t === 'TASK') icon = 'fa-square-check text-blue-500';
+        else if (t === 'STORY') icon = 'fa-bookmark text-purple-500';
+        return `<span class="inline-flex items-center space-x-1.5 text-xs font-medium text-slate-700"><i class="fa-solid ${icon}"></i><span>${t || 'TASK'}</span></span>`;
+    }
+
+    function getRoleBadgeClass(role) {
+        const r = (role || '').toUpperCase();
+        if (r === 'ADMIN') return 'bg-purple-50 text-purple-700 border border-purple-200';
+        if (r === 'MANAGER') return 'bg-indigo-50 text-indigo-700 border border-indigo-200';
+        if (r === 'TESTER') return 'bg-amber-50 text-amber-700 border border-amber-200';
+        return 'bg-blue-50 text-blue-700 border border-blue-200';
+    }
+
+    function escapeHtml(str) {
+        if (!str) return '';
+        return str.toString().replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    }
+
+    // Initialize on load
+    window.onload = function() {
+        testConnection();
+        loadProjects();
+    };
+</script>
+</body>
+</html>
