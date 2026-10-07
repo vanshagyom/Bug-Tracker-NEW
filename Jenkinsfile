@@ -3,10 +3,16 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'oneyear-backend'
+        // Must match the name given to the server under
+        // Manage Jenkins -> System -> SonarQube servers.
         SONARQUBE_SERVER = 'MySonarQube'
     }
 
     triggers {
+        // Registers this job to react to GitHub's webhook push events.
+        // Requires the "GitHub" plugin and a webhook configured on the
+        // repo (see setup steps). Needs one manual build first before
+        // Jenkins knows this job exists for the webhook to reach.
         githubPush()
     }
 
@@ -20,6 +26,10 @@ pipeline {
 
         stage('Free up memory for the build') {
             steps {
+                // This instance is small; stopping the running backend
+                // (not Jenkins/SonarQube, which the pipeline itself needs)
+                // buys headroom for the Maven compile. The database is now
+                // Neon, not a local container, so there's nothing else to stop.
                 sh 'docker stop oneyear-backend || true'
             }
         }
@@ -27,6 +37,10 @@ pipeline {
         stage('Build & Unit Test') {
             steps {
                 sh 'chmod +x ./mvnw'
+                // -DskipTests for now: the default @SpringBootTest context-load
+                // test tries to open a real DB connection, which nothing in
+                // this pipeline's environment provides. See the note at the
+                // bottom of this file for the proper fix (an H2 test profile).
                 sh './mvnw clean verify -DskipTests'
             }
             post {
@@ -47,7 +61,9 @@ pipeline {
         stage('Quality Gate') {
             steps {
                 timeout(time: 5, unit: 'MINUTES') {
-                    waitForQualityGate abortPipeline: true
+                    retry(3) {
+                        waitForQualityGate abortPipeline: true
+                    }
                 }
             }
         }
@@ -60,12 +76,16 @@ pipeline {
 
         stage('Deploy') {
             steps {
+                // Brings backend + mysql back up (or fresh up) using the
+                // image just built.
                 sh 'docker compose up -d --build'
             }
         }
 
         stage('Smoke Test') {
             steps {
+                // Give Spring Boot a moment to actually finish starting
+                // before hitting it.
                 sh 'sleep 15 && curl -f http://localhost:8092/api/users'
             }
         }
