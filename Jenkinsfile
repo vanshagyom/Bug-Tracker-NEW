@@ -3,16 +3,10 @@ pipeline {
 
     environment {
         IMAGE_NAME = 'oneyear-backend'
-        // Must match the name given to the server under
-        // Manage Jenkins -> System -> SonarQube servers.
         SONARQUBE_SERVER = 'MySonarQube'
     }
 
     triggers {
-        // Registers this job to react to GitHub's webhook push events.
-        // Requires the "GitHub" plugin and a webhook configured on the
-        // repo (see setup steps). Needs one manual build first before
-        // Jenkins knows this job exists for the webhook to reach.
         githubPush()
     }
 
@@ -26,10 +20,6 @@ pipeline {
 
         stage('Free up memory for the build') {
             steps {
-                // This instance is small; stopping the running backend
-                // (not Jenkins/SonarQube, which the pipeline itself needs)
-                // buys headroom for the Maven compile. The database is now
-                // Neon, not a local container, so there's nothing else to stop.
                 sh 'docker stop oneyear-backend || true'
             }
         }
@@ -37,10 +27,6 @@ pipeline {
         stage('Build & Unit Test') {
             steps {
                 sh 'chmod +x ./mvnw'
-                // -DskipTests for now: the default @SpringBootTest context-load
-                // test tries to open a real DB connection, which nothing in
-                // this pipeline's environment provides. See the note at the
-                // bottom of this file for the proper fix (an H2 test profile).
                 sh './mvnw clean verify -DskipTests'
             }
             post {
@@ -76,17 +62,51 @@ pipeline {
 
         stage('Deploy') {
             steps {
-                // Brings backend + mysql back up (or fresh up) using the
-                // image just built.
-                sh 'docker compose up -d --build'
+                // The database is Neon (external), so there is only one
+                // container to run - no docker compose needed. Credentials
+                // come from Jenkins, not from a .env file on the host.
+                withCredentials([
+                    string(credentialsId: 'neon-db-url', variable: 'DB_URL'),
+                    usernamePassword(credentialsId: 'neon-db-creds',
+                                     usernameVariable: 'DB_USER',
+                                     passwordVariable: 'DB_PASS')
+                ]) {
+                    // Single-quoted so Groovy does not interpolate the secrets;
+                    // the shell expands them instead and Jenkins masks them in logs.
+                    sh '''
+                        docker rm -f oneyear-backend || true
+                        docker run -d --name oneyear-backend \
+                          --restart unless-stopped \
+                          -p 8092:8092 \
+                          -e SPRING_DATASOURCE_URL="$DB_URL" \
+                          -e SPRING_DATASOURCE_USERNAME="$DB_USER" \
+                          -e SPRING_DATASOURCE_PASSWORD="$DB_PASS" \
+                          -e SPRING_JPA_HIBERNATE_DDL_AUTO=update \
+                          -e SERVER_PORT=8092 \
+                          oneyear-backend:latest
+                    '''
+                }
             }
         }
 
         stage('Smoke Test') {
             steps {
-                // Give Spring Boot a moment to actually finish starting
-                // before hitting it.
-                sh 'sleep 15 && curl -f http://localhost:8092/api/users'
+                // "localhost" inside the Jenkins container is Jenkins itself,
+                // not the host, so ask the app from inside its own container.
+                // Retries because Spring Boot + Neon can take a while to start.
+                sh '''
+                    for i in $(seq 1 12); do
+                        if docker exec oneyear-backend wget -q -O /dev/null http://localhost:8092/api/users; then
+                            echo "App is up"
+                            exit 0
+                        fi
+                        echo "Waiting for app to start... ($i/12)"
+                        sleep 10
+                    done
+                    echo "App did not become healthy. Last logs:"
+                    docker logs --tail 60 oneyear-backend
+                    exit 1
+                '''
             }
         }
     }
